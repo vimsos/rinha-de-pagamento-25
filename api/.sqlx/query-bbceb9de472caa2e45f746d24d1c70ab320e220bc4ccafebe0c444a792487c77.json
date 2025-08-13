@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "with processors as (\n\tselect\n\t\tunnest as name\n\tfrom\n\t\tunnest($1::text[])\n),\nsummaries as (\n\tselect\n\t\tprocessed_by as name,\n\t\tsum(amount) as total_amount,\n\t\tcount(amount) as total_requests\n\tfrom\n\t\tpayments.log\n\twhere\n\t\tprocessed_by = any($1)\n\t\tand requested_at >= $2\n\t\tand requested_at < $3\n\tgroup by\n\t\tprocessed_by\n)\nselect\n\tjson_object_agg(\n\t\tp.name,\n\t\tjson_build_object(\n\t\t\t'totalAmount', coalesce(s.total_amount, 0),\n\t\t\t'totalRequests', coalesce(s.total_requests, 0)\n\t\t)\n\t) as \"summary!: JsonValue\"\nfrom\n\tprocessors p\n\tleft join summaries s on p.name = s.name;\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "summary!: JsonValue",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bbceb9de472caa2e45f746d24d1c70ab320e220bc4ccafebe0c444a792487c77"
+}

@@ -1,0 +1,24 @@
+[package]
+name = "rinha-vimsos"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "chrono", "uuid", "macros", "json"] }
+serde = "1"
+serde_json = { version = "1", features = ["raw_value"] }
+axum = { version="0.8.4" }
+uuid = { version = "1", features = ["serde"] }
+log = "0.4"
+simplelog = { version = "0.12", features = ["termcolor"] }
+chrono = { version = "0.4", features = ["serde", "now"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"

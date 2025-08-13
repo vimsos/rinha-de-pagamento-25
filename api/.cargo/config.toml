@@ -1,0 +1,19 @@
+[env]
+DATABASE_URL = "postgres://postgres:postgres@localhost:5432/rinha"
+APP_CONFIG = '''
+{
+  "database_url": "postgres://postgres:postgres@localhost:5432/rinha",
+  "log_level": "Info",
+  "listen_port": 9999,
+  "processors": [
+    {
+      "name": "default",
+      "endpoint": "http://localhost:8001/payments"
+    },
+    {
+      "name": "fallback",
+      "endpoint": " http://localhost:8002/payments"
+    }
+  ]
+}
+'''

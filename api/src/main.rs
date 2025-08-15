@@ -35,8 +35,8 @@ pub struct Config {
 
 #[derive(Clone)]
 pub struct App {
+    pub targets: Vec<ProcessorConfig>,
     pub db: Pool<Postgres>,
-    pub config: Config,
     pub client: Client,
     pub sender: UnboundedSender<Payment>,
 }
@@ -72,7 +72,7 @@ async fn main() {
 
     let state = App {
         db,
-        config,
+        targets: config.processors,
         client,
         sender,
     };
@@ -84,7 +84,7 @@ async fn main() {
 
     tokio::spawn(async move { processor.run_forever().await });
 
-    let addr = SocketAddr::new([0, 0, 0, 0].into(), state.config.listen_port);
+    let addr = SocketAddr::new([0, 0, 0, 0].into(), config.listen_port);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
     let app = Router::new()
@@ -108,24 +108,16 @@ async fn new_payment(
 ) -> impl IntoResponse {
     let now = Utc::now();
 
-    match repository::insert(&state.db, dto.correlation_id, dto.amount, now).await {
-        Ok(_) => {
-            state
-                .sender
-                .send(Payment {
-                    correlation_id: dto.correlation_id,
-                    amount: dto.amount,
-                    requested_at: now,
-                })
-                .unwrap();
-
-            Ok(StatusCode::CREATED)
+    match state.sender.send(Payment {
+        correlation_id: dto.correlation_id,
+        amount: dto.amount,
+        requested_at: now,
+    }) {
+        Ok(_) => StatusCode::CREATED,
+        Err(error) => {
+            log::error!("failed submitting to internal processor, {}", error);
+            StatusCode::INTERNAL_SERVER_ERROR
         }
-        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-            log::info!("{} already exists", dto.correlation_id);
-            Ok(StatusCode::CREATED)
-        }
-        _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
@@ -146,12 +138,7 @@ async fn summary(
         .to
         .unwrap_or_else(|| DateTime::<Utc>::from_str("9999-12-31T23:59:59.999Z").unwrap());
 
-    let processors = state
-        .config
-        .processors
-        .iter()
-        .map(|p| p.name.clone())
-        .collect();
+    let processors = state.targets.iter().map(|p| p.name.clone()).collect();
 
     match repository::summary(&state.db, &processors, from, to).await {
         Ok(summary) => Ok((StatusCode::OK, Json(summary))),

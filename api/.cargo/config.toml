@@ -5,7 +5,9 @@ APP_CONFIG = '''
   "database_url": "postgres://postgres:postgres@localhost:5432/rinha",
   "log_level": "Info",
   "listen_port": 9999,
-  "processors": [
+  "max_in_flight": 128,
+  "max_wait_milis": 5,
+  "external_processors": [
     {
       "name": "default",
       "endpoint": "http://localhost:8001/payments"

@@ -7,9 +7,11 @@ services:
       APP_CONFIG: &app_config >
         {
           "database_url": "postgres://pg:pg@pg:5432/rinha",
-          "log_level": "Info",
+          "log_level": "Warn",
           "listen_port": 8000,
-          "processors": [
+          "max_in_flight": 256,
+          "max_wait_millis": 5,
+          "external_processors": [
             {
               "name": "default",
               "endpoint": "http://payment-processor-default:8080/payments"
@@ -30,8 +32,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.125"
-          memory: "10MB"
+          cpus: &api_cpu_limit "0.2"
+          memory: &api_memory_limit "25MB"
 
   api2:
     build:
@@ -49,8 +51,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.125"
-          memory: "10MB"
+          cpus: *api_cpu_limit
+          memory: *api_memory_limit
 
   nginx:
     image: nginx:latest
@@ -66,8 +68,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: "40MB"
+          cpus: "0.20"
+          memory: "20MB"
 
   pg:
     image: postgres:17
@@ -85,8 +87,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: "290MB"
+          cpus: "0.60"
+          memory: "200MB"
 
 networks:
   internal-network:

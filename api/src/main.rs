@@ -29,7 +29,9 @@ pub struct Config {
     pub listen_port: u16,
     pub database_url: String,
     pub log_level: String,
-    pub processors: Vec<ProcessorConfig>,
+    pub max_in_flight: usize,
+    pub max_wait_millis: usize,
+    pub external_processors: Vec<ProcessorConfig>,
 }
 
 pub static DB: OnceLock<Pool<Postgres>> = OnceLock::new();
@@ -59,7 +61,7 @@ async fn main() {
     )
     .unwrap();
 
-    EXTERNAL_PROCESSORS.set(config.processors).unwrap();
+    EXTERNAL_PROCESSORS.set(config.external_processors).unwrap();
 
     HTTP_CLIENT
         .set(
@@ -75,7 +77,12 @@ async fn main() {
     let (sender, receiver) = mpsc::unbounded_channel::<PostPaymentDto>();
 
     tokio::spawn(async move {
-        let mut processor = Processor { receiver };
+        let mut processor = Processor {
+            receiver,
+            max_in_flight: config.max_in_flight,
+            max_wait_millis: config.max_wait_millis,
+        };
+
         processor.run_forever().await
     });
 
@@ -139,13 +146,13 @@ async fn summary(Query(window): Query<SummaryParams>) -> impl IntoResponse {
 }
 
 fn db() -> &'static Pool<Postgres> {
-    unsafe { crate::DB.get().unwrap_unchecked() }
+    unsafe { DB.get().unwrap_unchecked() }
 }
 
 fn external_processors() -> &'static Vec<ProcessorConfig> {
-    unsafe { crate::EXTERNAL_PROCESSORS.get().unwrap_unchecked() }
+    unsafe { EXTERNAL_PROCESSORS.get().unwrap_unchecked() }
 }
 
 fn http_client() -> &'static reqwest::Client {
-    unsafe { crate::HTTP_CLIENT.get().unwrap_unchecked() }
+    unsafe { HTTP_CLIENT.get().unwrap_unchecked() }
 }

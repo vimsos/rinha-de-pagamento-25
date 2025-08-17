@@ -38,7 +38,7 @@ pub async fn set_processed_by(
 
 pub async fn summary(
     db: &Pool<Postgres>,
-    processors: &Vec<String>,
+    processor_names: &Vec<String>,
     from: DateTime<Utc>,
     to: DateTime<Utc>,
 ) -> Result<JsonValue, sqlx::Error> {
@@ -75,7 +75,7 @@ from
 	processors p
 	left join summaries s on p.name = s.name;
 "#,
-        processors,
+        processor_names,
         from,
         to
     )

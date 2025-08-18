@@ -1,19 +1,19 @@
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::Query,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
 };
 use chrono::{DateTime, Utc};
+use flume::Sender;
 use serde::Deserialize;
 use simplelog::{CombinedLogger, LevelFilter, TermLogger, TerminalMode};
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions, types::Decimal};
 use std::{env::var, net::SocketAddr, str::FromStr, sync::OnceLock, time::Duration};
-use tokio::sync::mpsc::{self, UnboundedSender};
 use uuid::Uuid;
 
-use crate::processor::Processor;
+use crate::processor::{Payment, Processor};
 
 mod processor;
 mod repository;
@@ -36,6 +36,7 @@ pub struct Config {
 
 pub static DB: OnceLock<Pool<Postgres>> = OnceLock::new();
 pub static EXTERNAL_PROCESSORS: OnceLock<Vec<ProcessorConfig>> = OnceLock::new();
+pub static SENDER: OnceLock<Sender<Payment>> = OnceLock::new();
 pub static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 #[tokio::main]
@@ -51,6 +52,8 @@ async fn main() {
         simplelog::ColorChoice::Always,
     )])
     .unwrap();
+
+    let (sender, receiver) = flume::unbounded();
 
     DB.set(
         PgPoolOptions::new()
@@ -74,7 +77,7 @@ async fn main() {
         )
         .unwrap();
 
-    let (sender, receiver) = mpsc::unbounded_channel::<PostPaymentDto>();
+    SENDER.set(sender).unwrap();
 
     tokio::spawn(async move {
         let mut processor = Processor {
@@ -91,8 +94,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/payments", post(new_payment))
-        .route("/payments-summary", get(summary))
-        .with_state(sender);
+        .route("/payments-summary", get(summary));
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -104,11 +106,15 @@ pub struct PostPaymentDto {
     pub amount: Decimal,
 }
 
-async fn new_payment(
-    State(sender): State<UnboundedSender<PostPaymentDto>>,
-    Json(dto): Json<PostPaymentDto>,
-) -> impl IntoResponse {
-    match sender.send(dto) {
+async fn new_payment(Json(dto): Json<PostPaymentDto>) -> impl IntoResponse {
+    let now = Utc::now();
+    let payment = Payment {
+        correlation_id: dto.correlation_id,
+        amount: dto.amount,
+        requested_at: now,
+    };
+
+    match sender().send(payment) {
         Ok(_) => StatusCode::CREATED,
         Err(error) => {
             log::error!("failed submitting to internal processor, {}", error);
@@ -151,6 +157,10 @@ fn db() -> &'static Pool<Postgres> {
 
 fn external_processors() -> &'static Vec<ProcessorConfig> {
     unsafe { EXTERNAL_PROCESSORS.get().unwrap_unchecked() }
+}
+
+fn sender<'a>() -> &'a Sender<Payment> {
+    unsafe { SENDER.get().unwrap_unchecked() }
 }
 
 fn http_client() -> &'static reqwest::Client {

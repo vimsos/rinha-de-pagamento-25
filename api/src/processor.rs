@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use flume::Receiver;
 use rust_decimal::Decimal;
 use serde::Serialize;
 use std::{
@@ -8,10 +9,9 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::mpsc::UnboundedReceiver;
 use uuid::Uuid;
 
-use crate::{PostPaymentDto, db, external_processors, http_client, repository};
+use crate::{db, external_processors, http_client, repository};
 
 #[derive(Serialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -22,7 +22,7 @@ pub struct Payment {
 }
 
 pub struct Processor {
-    pub receiver: UnboundedReceiver<PostPaymentDto>,
+    pub receiver: Receiver<Payment>,
     pub max_in_flight: usize,
     pub max_wait_millis: usize,
 }
@@ -34,14 +34,7 @@ impl Processor {
         let in_flight = Arc::new(AtomicUsize::new(0));
 
         loop {
-            if let Some(dto) = self.receiver.recv().await {
-                let now = Utc::now();
-                let payment = Payment {
-                    correlation_id: dto.correlation_id,
-                    amount: dto.amount,
-                    requested_at: now,
-                };
-
+            for payment in self.receiver.drain() {
                 let in_flight = in_flight.clone();
                 tokio::spawn(async move {
                     while in_flight.load(atomic::Ordering::Relaxed) >= max_in_flight {
@@ -50,21 +43,21 @@ impl Processor {
 
                     in_flight.fetch_add(1, atomic::Ordering::Relaxed);
 
-                    if let Some(payment) = insert_into_db(payment).await {
+                    if let Some(payment) = maybe_insert_into_db(payment).await {
                         let processed_by = submit_external_processor(payment, max_wait).await;
                         set_processed_by(payment, processed_by).await;
                     }
 
                     in_flight.fetch_sub(1, atomic::Ordering::Relaxed);
                 });
-            } else {
-                return;
             }
+
+            tokio::time::sleep(max_wait).await;
         }
     }
 }
 
-async fn insert_into_db(payment: Payment) -> Option<Payment> {
+async fn maybe_insert_into_db(payment: Payment) -> Option<Payment> {
     loop {
         match repository::insert(
             db(),

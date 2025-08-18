@@ -8,7 +8,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use simplelog::{CombinedLogger, LevelFilter, TermLogger, TerminalMode};
-use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use sqlx::{Pool, Postgres, postgres::PgPoolOptions, types::Decimal};
 use std::{env::var, net::SocketAddr, str::FromStr, sync::OnceLock, time::Duration};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use uuid::Uuid;
@@ -66,7 +66,7 @@ async fn main() {
     HTTP_CLIENT
         .set(
             reqwest::Client::builder()
-                .timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(2))
                 .connect_timeout(Duration::from_secs(2))
                 .pool_max_idle_per_host(500)
                 .build()
@@ -101,7 +101,7 @@ async fn main() {
 #[serde(rename_all = "camelCase")]
 pub struct PostPaymentDto {
     pub correlation_id: Uuid,
-    pub amount: f64,
+    pub amount: Decimal,
 }
 
 async fn new_payment(

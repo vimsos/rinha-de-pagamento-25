@@ -1,3 +1,6 @@
+use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use serde::Serialize;
 use std::{
     sync::{
         Arc,
@@ -5,9 +8,6 @@ use std::{
     },
     time::Duration,
 };
-
-use chrono::{DateTime, Utc};
-use serde::Serialize;
 use tokio::sync::mpsc::UnboundedReceiver;
 use uuid::Uuid;
 
@@ -17,7 +17,7 @@ use crate::{PostPaymentDto, db, external_processors, http_client, repository};
 #[serde(rename_all = "camelCase")]
 pub struct Payment {
     pub correlation_id: Uuid,
-    pub amount: f64,
+    pub amount: Decimal,
     pub requested_at: DateTime<Utc>,
 }
 
@@ -95,6 +95,7 @@ async fn submit_external_processor(
     max_wait_between_attempts: Duration,
 ) -> String {
     let mut attempts = 0;
+
     loop {
         let external_processors = external_processors();
         let target = &external_processors[attempts % external_processors.len()];

@@ -6,7 +6,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Float8",
+        "Numeric",
         "Timestamptz"
       ]
     },

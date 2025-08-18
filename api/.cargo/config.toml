@@ -6,7 +6,7 @@ APP_CONFIG = '''
   "log_level": "Info",
   "listen_port": 9999,
   "max_in_flight": 128,
-  "max_wait_milis": 5,
+  "max_wait_millis": 5,
   "external_processors": [
     {
       "name": "default",

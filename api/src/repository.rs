@@ -1,11 +1,14 @@
 use chrono::{DateTime, Utc};
-use sqlx::{Pool, Postgres, types::JsonValue};
+use sqlx::{
+    Pool, Postgres,
+    types::{Decimal, JsonValue},
+};
 use uuid::Uuid;
 
 pub async fn insert(
     db: &Pool<Postgres>,
     id: Uuid,
-    amount: f64,
+    amount: Decimal,
     requested_at: DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
